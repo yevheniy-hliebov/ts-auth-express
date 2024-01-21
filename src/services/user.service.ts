@@ -24,7 +24,8 @@ export class UserService {
       const createdUser = await UserModel.create(createUserDto);
       const logger = new Logger(proccesName)
       logger.log('User created. id: ' + createdUser.id)
-      return filterObjectByKeys(createdUser, ['id', 'username', 'email', 'email_verified']);
+      const createdUserFilter = filterObjectByKeys(createdUser, ['id', 'username', 'email', 'email_verified']);
+      return createdUserFilter;
     } catch (error: any) {
       if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
         throw new HttpException(proccesName, 'User with this email already exists.', 409);

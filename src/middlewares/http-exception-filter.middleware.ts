@@ -22,12 +22,14 @@ const HttpExceptionFilter = async (err: HttpException | Error, req: Request, res
     exceptionResponse.errors = errors;
   }
 
-  const logger = new Logger(err.name)
-  if (err instanceof HttpException) {
-    logger.setProcessName(err.processName);
-  } 
-  logger.error(err.message, 'errors' in err ? err.errors : undefined, err.stack);
-  
+  if (exceptionResponse.message !== `Cannot ${req.method} ${req.path}`) {
+    const logger = new Logger(err.name)
+    if (err instanceof HttpException) {
+      logger.setProcessName(err.processName);
+    } 
+    logger.error(err.message, 'errors' in err ? err.errors : undefined, err.stack);
+  }
+
   res.status(status).json(exceptionResponse);
 }
 

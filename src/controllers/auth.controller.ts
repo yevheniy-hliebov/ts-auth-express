@@ -16,9 +16,9 @@ class AuthController {
 
   public async register(req: Request, res: Response, next: NextFunction) {
     const user: CreateUserDto = req.body;
-    this.authService.register(user)
-      .then((registerResult: any) => {
-        res.status(201).json({ id: registerResult.user.id, username: registerResult.user.username, token: registerResult.token });
+    AuthService.register(user)
+      .then((registerResult: any) => {      
+        res.status(201).json({ email: registerResult.user.email, token: registerResult.token });
       })
       .catch(error => {
         next(error)
