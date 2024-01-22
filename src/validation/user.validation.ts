@@ -1,4 +1,4 @@
-import HttpException from "../exceptions/HttpException.js";
+import HttpException from "../exceptions/http.exception.js";
 import { CreateUserDto } from "../types/user.type.js"
 
 export function createdUserValidation(createUserDto: CreateUserDto) {

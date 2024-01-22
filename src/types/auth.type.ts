@@ -1,3 +1,7 @@
+import { Request } from "express";
+
+export type AuthRequest = Request & { user?: any; isPublic?: boolean }
+
 export type RegisterDto = {
   username: string;
   email: string;

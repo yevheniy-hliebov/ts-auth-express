@@ -1,4 +1,4 @@
-import HttpException from "../exceptions/HttpException.js";
+import HttpException from "../exceptions/http.exception.js";
 import { User, UserDocument, UserModel } from "../models/user/user.model.js";
 import filterObjectByKeys from "../modules/filter-object.js";
 import Logger from "../modules/logger.js";
@@ -34,7 +34,7 @@ export class UserService {
       }
     }
   }
-  
+
   public async verifyEmail(email: string) {
     const proccesName = 'VerifyEmail';
     try {
@@ -46,11 +46,30 @@ export class UserService {
       throw new HttpException(proccesName, 'Failed verify email', 500);
     }
   }
-  
+
   public async findOne(filter: object, select = {}) {
     const proccesName = 'FindUser';
     try {
       const user = await UserModel.findOne(filter).select(select).exec();
+      if (!user) {
+        throw new HttpException(proccesName, 'User not found', 404);
+      }
+      const logger = new Logger(proccesName)
+      logger.log('User found. id: ' + user.id)
+      return user;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      } else {
+        throw new HttpException(proccesName, 'Internal Server Error', 500);
+      }
+    }
+  }
+
+  public async findById(id: string, select = {}) {
+    const proccesName = 'FindByIdUser';
+    try {
+      const user = await UserModel.findById(id).select(select).exec();
       if (!user) {
         throw new HttpException(proccesName, 'User not found', 404);
       }
@@ -75,6 +94,25 @@ export class UserService {
       return users;
     } catch (error) {
       throw new HttpException(proccesName, 'Internal Server Error', 500);
+    }
+  }
+  
+  public async changePassword(id: string, newPassword: string) {
+    const proccesName = 'ChangePassword';
+    const logger = new Logger(proccesName)
+    try {
+      const hashNewPassword = await this.hashPassword(newPassword);
+      const changedUser = await UserModel.findByIdAndUpdate(id, { password: hashNewPassword }, { new: true }).exec()
+      if (!changedUser) {
+        throw new HttpException(proccesName, 'User not found', 404);
+      }
+      logger.log('Changed password. id: ' + changedUser.id)
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      } else {
+        throw new HttpException(proccesName, 'An error occurred while changing the password', 500);
+      }
     }
   }
 

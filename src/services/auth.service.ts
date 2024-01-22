@@ -1,5 +1,5 @@
 import configuragion, { nodemailerConfig } from '../config/configuration.js';
-import HttpException from '../exceptions/HttpException.js';
+import HttpException from '../exceptions/http.exception.js';
 import { UserVerifyTokenModel } from '../models/user/user-verify-token.model.js';
 import Logger from '../modules/logger.js';
 import { LoginDto, RegisterDto, VerifyEmaiDto } from '../types/auth.type.js';
@@ -27,7 +27,7 @@ class AuthService {
         const payload = { id: createdUser.id, username: createdUser.username };
         return {
           user: createdUser,
-          token: jwt.sign(payload, configuragion.jwt_secret, { expiresIn: configuragion.jwt_expires_in }),
+          token: jwt.sign(payload, configuragion.jwt_secret, { expiresIn: configuragion.jwt_expires_in + 's' }),
         };
       })
       .catch(error => {
@@ -49,7 +49,7 @@ class AuthService {
         logger.log(`User with id '${foundUser.id}' successfully authorized`)
         return {
           user: foundUser,
-          token: jwt.sign(payload, configuragion.jwt_secret, { expiresIn: configuragion.jwt_expires_in }),
+          token: jwt.sign(payload, configuragion.jwt_secret, { expiresIn: configuragion.jwt_expires_in + 's' }),
         };
       })
       .catch(error => {
@@ -57,6 +57,20 @@ class AuthService {
           throw new HttpException('LoginUser', `Failed to login: ${error.message}`, error.statusCode, error.errors);
         }
       })
+  }
+
+  public async changePassword(id: string, password: string, newPassword: string) {
+    const logger = new Logger('ChangePassword')   
+    const user = await this.userService.findById(id);
+    const isMatchPassword = await bcrypt.compare(password, user.password);
+    if (!isMatchPassword) {
+      throw new HttpException('ChangePassword', 'Password is incorrect', 401);
+    } else {
+      this.userService.changePassword(id, newPassword)
+        .catch(error => {
+          throw error;
+        })
+    }
   }
 
   public async verifyEmail(verifyEmaiDto: VerifyEmaiDto) {

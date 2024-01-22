@@ -2,8 +2,9 @@ import express from 'express';
 import configuragion from './config/configuration.js';
 import Logger from './modules/logger.js';
 import HttpExceptionFilter from './middlewares/http-exception-filter.middleware.js';
-import HttpException from './exceptions/HttpException.js';
+import HttpException from './exceptions/http.exception.js';
 import authRouter from './routes/auth.router.js';
+import AuthGuard from './middlewares/auth-guard.middleware.js';
 
 const logger = new Logger();
 const app = express();
