@@ -2,11 +2,12 @@ import configuragion, { nodemailerConfig } from '../config/configuration.js';
 import HttpException from '../exceptions/HttpException.js';
 import { UserVerifyTokenModel } from '../models/user/user-verify-token.model.js';
 import Logger from '../modules/logger.js';
-import { CreateUserDto } from '../types/user.type.js';
+import { LoginDto, RegisterDto, VerifyEmaiDto } from '../types/auth.type.js';
 import UserService from './user.service.js';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import { v4 as uuid } from 'uuid';
+import * as bcrypt from 'bcrypt';
 
 class AuthService {
   private static instance: AuthService;
@@ -19,19 +20,69 @@ class AuthService {
     return AuthService.instance;
   }
 
-  public async register(registerDto: CreateUserDto) {
+  public async register(registerDto: RegisterDto) {
     return this.userService.create(registerDto)
-      .then(async (registedUser) => {
-        this.sendVerifyEmail(registedUser.id, registedUser.email);
-        const payload = { id: registedUser.id, username: registedUser.username };
+      .then(async (createdUser) => {
+        this.sendVerifyEmail(createdUser.id, createdUser.email);
+        const payload = { id: createdUser.id, username: createdUser.username };
         return {
-          user: registedUser,
+          user: createdUser,
           token: jwt.sign(payload, configuragion.jwt_secret, { expiresIn: configuragion.jwt_expires_in }),
         };
       })
       .catch(error => {
         if (error instanceof HttpException) {
           throw new HttpException('RegisterUser', `Failed to register: ${error.message}`, error.statusCode, error.errors);
+        }
+      })
+  }
+
+  public async login(loginDto: LoginDto) {
+    return this.userService.findOne({ email: loginDto.email }, { id: 1, email: 1, password: 1 })
+      .then(async (foundUser) => {
+        const logger = new Logger('LoginUser')
+        const isMatchPassword = await bcrypt.compare(loginDto.password, foundUser.password)
+        if (!isMatchPassword) {
+          throw new HttpException('LoginUser', 'Password is incorrect', 401);
+        }
+        const payload = { id: foundUser.id, username: foundUser.username }
+        logger.log(`User with id '${foundUser.id}' successfully authorized`)
+        return {
+          user: foundUser,
+          token: jwt.sign(payload, configuragion.jwt_secret, { expiresIn: configuragion.jwt_expires_in }),
+        };
+      })
+      .catch(error => {
+        if (error instanceof HttpException) {
+          throw new HttpException('LoginUser', `Failed to login: ${error.message}`, error.statusCode, error.errors);
+        }
+      })
+  }
+
+  public async verifyEmail(verifyEmaiDto: VerifyEmaiDto) {
+    return this.userService.findOne({ email: verifyEmaiDto.email }, { id: 1, email: 1, email_verified: 1 })
+      .then(async (foundUser) => {
+        if (!foundUser.email_verified) {
+          return UserVerifyTokenModel.findOne(verifyEmaiDto).exec()
+            .then((foundEmailToken: any) => {
+              if (foundEmailToken) {
+                return this.userService.verifyEmail(verifyEmaiDto.email)
+                  .then((verifiedUser) => {
+                    UserVerifyTokenModel.deleteOne({ email: foundEmailToken.email }).exec()
+                    return verifiedUser;
+                  })
+                  .catch(error => {
+                    if (error instanceof HttpException) {
+                      throw error;
+                    }
+                  })
+              }
+            })
+            .catch(error => {
+              throw error;
+            })
+        } else {
+          return foundUser
         }
       })
   }
@@ -59,9 +110,9 @@ class AuthService {
         }
       }
     }
-    
+
     const token = await saveToken();
-    
+
     const html = `
     <!DOCTYPE html>
     <html lang="en">

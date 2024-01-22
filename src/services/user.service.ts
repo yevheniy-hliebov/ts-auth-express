@@ -35,6 +35,18 @@ export class UserService {
     }
   }
   
+  public async verifyEmail(email: string) {
+    const proccesName = 'VerifyEmail';
+    try {
+      const verifiedUser = await UserModel.findOneAndUpdate({ email: email }, { email_verified: true }, { new: true }).select({ id: 1, email: 1, email_verified: 1 }).exec();
+      const logger = new Logger(proccesName)
+      logger.log('The email has been verified. id: ' + verifiedUser?.id)
+      return verifiedUser;
+    } catch (error) {
+      throw new HttpException(proccesName, 'Failed verify email', 500);
+    }
+  }
+  
   public async findOne(filter: object, select = {}) {
     const proccesName = 'FindUser';
     try {

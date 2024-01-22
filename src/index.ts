@@ -10,10 +10,10 @@ const app = express();
 
 app.use(express.json());
 
-app.use('/auth', authRouter);
 app.get(`/`, (req, res, next) => {
   res.send('API Worked');
 });
+app.use('/auth', authRouter);
 
 app.use((req, res, next) => {
   next(new HttpException('ExpressApplication', `Cannot ${req.method} ${req.path}`, 404));

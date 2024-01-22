@@ -9,5 +9,7 @@ router.use((req, res, next) => {
 });
 
 router.post('/register', authController.register);
+router.post('/login', authController.login);
+router.get('/verification/:email', authController.verifyEmail);
 
 export default router;
