@@ -7,6 +7,7 @@
   "scripts": {
     "build": "tsc",
     "start": "tsc && node dist/index.js",
+    "dev": "nodemon",
     "test": "node test.js"
   },
   "keywords": [],
