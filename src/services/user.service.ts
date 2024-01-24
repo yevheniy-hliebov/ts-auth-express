@@ -20,8 +20,9 @@ export class UserService {
     const proccesName = 'CreatingUser';
     createdUserValidation(createUserDto);
     try {
-      createUserDto.password = await this.hashPassword(createUserDto.password);
-      const createdUser = await UserModel.create(createUserDto);
+      // createUserDto.password = await this.hashPassword(createUserDto.password);
+      const createdUser = await new UserModel(createUserDto).save();
+      // const createdUser = await UserModel.create(createUserDto);
       const logger = new Logger(proccesName)
       logger.log('User created. id: ' + createdUser.id)
       const createdUserFilter = filterObjectByKeys(createdUser, ['id', 'username', 'email', 'email_verified']);
@@ -116,7 +117,7 @@ export class UserService {
     }
   }
 
-  private async hashPassword(password: string) {
+  public async hashPassword(password: string) {
     return await bcrypt.hash(password, 10)
   }
 }

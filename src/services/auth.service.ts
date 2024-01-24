@@ -2,12 +2,14 @@ import configuragion, { nodemailerConfig } from '../config/configuration.js';
 import HttpException from '../exceptions/http.exception.js';
 import { UserVerifyTokenModel } from '../models/user/user-verify-token.model.js';
 import Logger from '../modules/logger.js';
-import { LoginDto, RegisterDto, VerifyEmaiDto } from '../types/auth.type.js';
+import { LoginDto, RegisterDto, ResetPasswordDto, VerifyEmaiDto } from '../types/auth.type.js';
 import UserService from './user.service.js';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import { v4 as uuid } from 'uuid';
 import * as bcrypt from 'bcrypt';
+import crypto from 'crypto';
+import { UserRecoveryCode, UserRecoveryCodeModel } from '../models/user/user-recovery-code.model.js';
 
 class AuthService {
   private static instance: AuthService;
@@ -60,7 +62,7 @@ class AuthService {
   }
 
   public async changePassword(id: string, password: string, newPassword: string) {
-    const logger = new Logger('ChangePassword')   
+    const logger = new Logger('ChangePassword')
     const user = await this.userService.findById(id);
     const isMatchPassword = await bcrypt.compare(password, user.password);
     if (!isMatchPassword) {
@@ -159,6 +161,99 @@ class AuthService {
       }
     });
   }
+
+  public async forgotPassword(email: string) {
+    try {
+      const logger = new Logger('ForgotPassword');
+      const recoveryCode = this.generateRecoveryCode();
+      await this.userService.findOne({ email: email }, { id: 1, email: 1 });
+      const existingRecoveryCode = await UserRecoveryCodeModel.findOne({ email: email });
+      if (existingRecoveryCode) {
+        await UserRecoveryCodeModel.updateOne({ email: email }, { $set: { code: recoveryCode } });
+      } else {
+        await UserRecoveryCodeModel.create({ email: email, code: recoveryCode });
+      }
+
+      const transporter = nodemailer.createTransport(nodemailerConfig);
+      const html = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Reset password</title>
+        </head>
+          <body>
+              <p>Your recovery code is: <strong>${recoveryCode}</strong></p>
+              <p>If you have not sent a password reset request, please ignore this email.</p>
+          </body>
+          </html>`
+
+      const mailOptions = {
+        from: nodemailerConfig.auth.user,
+        to: email,
+        subject: "Password Recovery",
+        html: html
+      };
+
+      transporter.sendMail(mailOptions, (error, info) => {
+        if (error) {
+          logger.error("Error sending Password Recovery to email: ", error);
+        } else {
+          logger.log('Password Recovery to Email sent: ', info.response);
+        }
+      });
+    } catch (error: any) {
+      throw new HttpException('ForgotPassword', 'Failed send recovery code: ' + error.message, 'statusCode' in error ? error.statusCode : 400);
+    }
+  }
+
+  public async canResetPassword(email: string, code: string) {
+    try {
+      if (!email || !code) {
+        throw new HttpException('CheckCanResetPassword', 'Email and code required', 400);
+      }
+      await this.userService.findOne({ email: email }, { id: 1, email: 1 });
+      const userRecoveryCode: any = await UserRecoveryCodeModel.findOne({ email: email }).exec();
+      if (!userRecoveryCode) {
+        throw new HttpException('CheckCanResetPassword', 'Recovery code not found', 404);
+      }
+      if (userRecoveryCode?.code === code) {
+        return true;
+      } else {
+        return false;
+      }
+    } catch (error: any) {
+      throw new HttpException('CheckCanResetPassword', 'Error checking password reset permission: ' + error.message, 'statusCode' in error ? error.statusCode : 400);
+    }
+  }
+
+  public async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    const { email, code, new_password, confirm_password } = resetPasswordDto;
+    try {
+      if (!email || !code || !new_password || !confirm_password) {
+        throw new HttpException('ResetPassword', 'Email, code, new password and confirmed password required', 400);
+      }
+      if (new_password !== confirm_password) {
+        throw new HttpException('ResetPassword', 'Password and confirmation do not match', 400);
+      }
+      const user = await this.userService.findOne({ email: email });
+      const userRecoveryCode: any = await UserRecoveryCodeModel.findOne({ email: email }).exec();
+      if (!userRecoveryCode || userRecoveryCode.code !== code) {
+        throw new HttpException('ResetPassword', 'Password reset is not allowed', 400);
+      } else {
+        user.password = new_password;
+        user.save();
+        await UserRecoveryCodeModel.findOneAndDelete({ email: email });
+      }
+    } catch (error: any) {
+      throw new HttpException('ResetPassword', 'Error password reset: ' + error.message, 'statusCode' in error ? error.statusCode : 500);
+    }
+  }
+
+  private generateRecoveryCode() {
+    return crypto.randomBytes(3).toString('hex').toUpperCase();
+  };
 }
 
 const authService = AuthService.getInstance()

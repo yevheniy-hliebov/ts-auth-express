@@ -1,5 +1,6 @@
 import mongoose, { Schema, HydratedDocument } from 'mongoose';
 import { userDB } from '../../config/database.js';
+import * as bcrypt from 'bcrypt';
 
 export type User = {
   username: string;
@@ -38,6 +39,16 @@ const UserSchema = new Schema({
     type: String
   }
 }, { timestamps: true })
+
+UserSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) {
+    return next();
+  }
+  console.log(this.password);
+  const hash = await bcrypt.hash(this.password, 10);
+  this.password = hash;
+  next();
+});
 
 export const UserModel = userDB.model<User>('user', UserSchema);
 

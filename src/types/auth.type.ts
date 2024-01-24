@@ -17,3 +17,10 @@ export type VerifyEmaiDto = {
   email: string;
   token: string;
 }
+
+export type ResetPasswordDto = {
+  email: string;
+  code: string;
+  new_password: string;
+  confirm_password: string;
+}
