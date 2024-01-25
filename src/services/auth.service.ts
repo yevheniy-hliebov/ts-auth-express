@@ -10,6 +10,7 @@ import { v4 as uuid } from 'uuid';
 import * as bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { UserRecoveryCode, UserRecoveryCodeModel } from '../models/user/user-recovery-code.model.js';
+import dbConfig from '../config/database.js';
 
 class AuthService {
   private static instance: AuthService;
@@ -79,12 +80,13 @@ class AuthService {
     return this.userService.findOne({ email: verifyEmaiDto.email }, { id: 1, email: 1, email_verified: 1 })
       .then(async (foundUser) => {
         if (!foundUser.email_verified) {
-          return UserVerifyTokenModel.findOne(verifyEmaiDto).exec()
-            .then((foundEmailToken: any) => {
-              if (foundEmailToken) {
+          return UserVerifyTokenModel.findOne({email: verifyEmaiDto.email}).exec()
+            .then(async (foundEmail: any) => {
+              const isMatchedToken = await bcrypt.compare(verifyEmaiDto.token, foundEmail.token);
+              if (isMatchedToken) {
                 return this.userService.verifyEmail(verifyEmaiDto.email)
                   .then((verifiedUser) => {
-                    UserVerifyTokenModel.deleteOne({ email: foundEmailToken.email }).exec()
+                    UserVerifyTokenModel.deleteOne({ email: foundEmail.email }).exec()
                     return verifiedUser;
                   })
                   .catch(error => {
@@ -92,6 +94,8 @@ class AuthService {
                       throw error;
                     }
                   })
+              } else {
+                throw new HttpException('VerifyEmail', 'The Verification token does not match the stored token', 400);
               }
             })
             .catch(error => {
@@ -111,10 +115,10 @@ class AuthService {
     async function saveToken() {
       try {
         const token = uuid() + '-' + Date.now();
-        await UserVerifyTokenModel.create({
+        await new UserVerifyTokenModel({
           email: userEmail,
           token: token
-        })
+        }).save();
         logger.log('Verivication Token was saved successfully');
         return token;
       }
@@ -141,6 +145,7 @@ class AuthService {
           <p>Welcome!</p>
           <p>Please click the button below to verify your email:</p>
           <a href="${configuragion.url_domain_verification}/verification/${userEmail}?token=${token}" style="display: inline-block; padding: 10px 20px; background-color: #4CAF50; color: #fff; text-decoration: none; border-radius: 5px;">Verify Email</a>
+          <p>Verification is available ${Math.round(dbConfig.verification_token_expores_in / 3600)} hours after sending the letter, if it does not work - make a second request for verification.</p>
           <p>If you didn't create this account, please ignore this email.</p>
       </body>
       </html>`
@@ -171,7 +176,7 @@ class AuthService {
       if (existingRecoveryCode) {
         await UserRecoveryCodeModel.updateOne({ email: email }, { $set: { code: recoveryCode } });
       } else {
-        await UserRecoveryCodeModel.create({ email: email, code: recoveryCode });
+        await new UserRecoveryCodeModel({ email: email, code: recoveryCode }).save();
       }
 
       const transporter = nodemailer.createTransport(nodemailerConfig);
@@ -185,6 +190,7 @@ class AuthService {
         </head>
           <body>
               <p>Your recovery code is: <strong>${recoveryCode}</strong></p>
+              <p>Recovery code is available ${Math.round(dbConfig.recovery_code_expores_in / 3600)} hours</p>
               <p>If you have not sent a password reset request, please ignore this email.</p>
           </body>
           </html>`
@@ -218,7 +224,8 @@ class AuthService {
       if (!userRecoveryCode) {
         throw new HttpException('CheckCanResetPassword', 'Recovery code not found', 404);
       }
-      if (userRecoveryCode?.code === code) {
+      const isMatchCode = await bcrypt.compare(code, userRecoveryCode.code);
+      if (isMatchCode) {
         return true;
       } else {
         return false;
@@ -239,7 +246,11 @@ class AuthService {
       }
       const user = await this.userService.findOne({ email: email });
       const userRecoveryCode: any = await UserRecoveryCodeModel.findOne({ email: email }).exec();
-      if (!userRecoveryCode || userRecoveryCode.code !== code) {
+      if (!userRecoveryCode) {
+        throw new HttpException('ResetPassword', 'Password reset is not allowed', 400);
+      }
+      const isMatchCode = await bcrypt.compare(code, userRecoveryCode.code);
+      if (!isMatchCode) {
         throw new HttpException('ResetPassword', 'Password reset is not allowed', 400);
       } else {
         user.password = new_password;

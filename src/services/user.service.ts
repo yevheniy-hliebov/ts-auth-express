@@ -1,3 +1,4 @@
+import dbConfig from "../config/database.js";
 import HttpException from "../exceptions/http.exception.js";
 import { User, UserDocument, UserModel } from "../models/user/user.model.js";
 import filterObjectByKeys from "../modules/filter-object.js";
@@ -118,7 +119,7 @@ export class UserService {
   }
 
   public async hashPassword(password: string) {
-    return await bcrypt.hash(password, 10)
+    return await bcrypt.hash(password, dbConfig.salt_or_rounds);
   }
 }
 

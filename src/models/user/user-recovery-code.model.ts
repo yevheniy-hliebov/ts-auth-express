@@ -1,5 +1,6 @@
-import mongoose, { Schema, HydratedDocument } from 'mongoose';
-import { userDB } from '../../config/database.js';
+import { Schema, HydratedDocument } from 'mongoose';
+import dbConfig, { userDB } from '../../config/database.js';
+import * as bcrypt from 'bcrypt';
 
 export type UserRecoveryCode = {
   email: string;
@@ -19,9 +20,18 @@ const UserRecoveryCodeSchema = new Schema({
   createdAt: {
     type: Date,
     default: Date.now(),
-    expires: 3600,
+    expires: dbConfig.recovery_code_expores_in,
   }
 })
+
+UserRecoveryCodeSchema.pre("save", async function (next) {
+  if (!this.isModified("code")) {
+    return next();
+  }
+  const hash = await bcrypt.hash(this.code, dbConfig.salt_or_rounds);
+  this.code = hash;
+  next();
+});
 
 export const UserRecoveryCodeModel = userDB.model<UserRecoveryCode>('user-recovery-codes', UserRecoveryCodeSchema);
 
